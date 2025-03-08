@@ -7,6 +7,24 @@ app.use(express.json());
 
 const users = [];
 
+const authMiddleware = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  const token = authHeader?.split(" ")[1];
+
+  if (!token) {
+    return res.status(401).send({ error: "Token missing" });
+  }
+
+  try {
+    const decoded = jwt.verify(token, "mysecret");
+    const user = users.find((u) => u.username === decoded.username);
+    req.user = user;
+    next();
+  } catch (err) {
+    res.status(401).send({ error: "Invalid or expired token" });
+  }
+};
+
 app.post("/register", async (req, res) => {
   const { username, password } = req.body;
   if (users.find((user) => user.username === username)) {
@@ -15,7 +33,7 @@ app.post("/register", async (req, res) => {
   const hashedPassword = await bcrypt.hash(password, 10);
   const newuser = { username, password: hashedPassword };
   users.push(newuser);
-  res.status(201).send({ message: "User created!", newuser });
+  res.status(201).send({ message: "User created!", username });
 });
 
 app.post("/login", async (req, res) => {
@@ -32,19 +50,8 @@ app.post("/login", async (req, res) => {
   res.status(200).send({ message: "login success", token: token });
 });
 
-app.get("/profile", (req, res) => {
-  const authHeader = req.headers.authorization;
-  const token = authHeader?.split(" ")[1];
-
-  if (!token) {
-    return res.status(401).send({ error: "Token missing" });
-  }
-
-  try {
-    const decoded = jwt.verify(token, "mysecret");
-    const user = users.find((u) => u.username === decoded.username);
-    res.status(200).send({ message: "Profile data", user });
-  } catch (err) {
-    res.status(401).send({ error: "Invalid or expired token" });
-  }
+app.get("/profile", authMiddleware, (req, res) => {
+  res.status(200).send({ message: "Profile data", user: req.user });
 });
+
+app.listen(3000);
